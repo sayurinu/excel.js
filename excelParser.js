@@ -4,21 +4,24 @@ var Promise = require('node-promise'),
 	all = Promise.all,
 	_ = require('underscore');
 
-function extractFiles(path) {
+function extractFiles(path, sheet) {
 	var unzip = require('unzip'),
 		deferred = defer();
 
 	var files = {
-		'xl/worksheets/sheet1.xml': {
+        strings: {
 			deferred: defer()
 		},
-		'xl/sharedStrings.xml': {
-			deferred: defer()
-		}
+        sheet: {
+            deferred: defer()
+        },
+		'xl/sharedStrings.xml': 'strings'
 	};
 
     var noop = function () {};
-	
+
+    files['xl/worksheets/sheet' + sheet + '.xml'] = 'sheet';
+
 	var srcStream = path instanceof require('stream') ?
 		path :
 		require('fs').createReadStream(path);
@@ -34,8 +37,8 @@ function extractFiles(path) {
 				entry.on('data', function(data) {
 					contents += data.toString();
 				}).on('end', function() {
-					files[entry.path].contents = contents;
-					files[entry.path].deferred.resolve();
+					files[files[entry.path]].contents = contents;
+					files[files[entry.path]].deferred.resolve();
 				});
 			} else {
                 entry.on('data', noop); // otherwise unzip.Parse() will hang forever on this entry on some xlsx files
@@ -66,8 +69,8 @@ function calculateDimensions (cells) {
 
 function extractData(files) {
 	var libxmljs = require('libxmljs'),
-		sheet = libxmljs.parseXml(files['xl/worksheets/sheet1.xml'].contents),
-		strings = libxmljs.parseXml(files['xl/sharedStrings.xml'].contents),
+		sheet = libxmljs.parseXml(files.sheet.contents),
+		strings = libxmljs.parseXml(files.strings.contents),
 		ns = {a: 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'},
 		data = [];
 
@@ -138,11 +141,33 @@ function extractData(files) {
 	return data;
 }
 
-module.exports = function parseXlsx(path, cb) {
-	extractFiles(path).then(function(files) {
+module.exports = function parseXlsx() {
+  if(arguments.length == 2) {
+    path = arguments[0];
+    sheet = '1';
+    cb = arguments[1];
+  }
+  if(arguments.length == 3) {
+    path = arguments[0];
+    sheet = arguments[1];
+    cb = arguments[2];
+  }
+	extractFiles(path, sheet).then(function(files) {
 		cb(null, extractData(files));
 	},
 	function(err) {
 		cb(err);
 	});
+};
+
+
+
+var files = {
+    strings: {
+        deferred: defer()
+    },
+    sheet: {
+        deferred: defer()
+    },
+    'xl/sharedStrings.xml': 'strings'
 };
