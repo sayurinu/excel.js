@@ -182,7 +182,7 @@ module.exports = function parseXlsx() {
     else if (arguments.length == 3) {
         path = arguments[0];
         sheets = arguments[1];
-        if (!Array.isArray(sheets)) sheets = [sheets];
+        if (typeof sheets === 'number') sheets = [sheets];
         cb = arguments[2];
     }
     extractFiles(path, sheets, function(err, files) {
