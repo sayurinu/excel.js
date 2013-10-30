@@ -26,12 +26,13 @@ If you have multiple sheets in your spreadsheet,
       console.log(data);
       // [ { sheetNum: 2, contents: (array of arrays) }, { sheetNum: 3, contents: (array of arrays) } ]
     });
+    
 
 MIT License.
 
 *Author: Trevor Dixon <trevordixon@gmail.com>*
 
-Contributors:
+Contributors: 
 - Jake Scott <scott.iroh@gmail.com>
 - Fabian Tollenaar <fabian@startingpoint.nl> (Just a small contribution, really)
 - amakhrov
