@@ -1,55 +1,67 @@
-var Promise = require('node-promise'),
-	defer = Promise.defer,
-	when = Promise.when,
-	all = Promise.all,
-	_ = require('underscore');
+var _ = require('underscore'),
+    fs = require('fs'),
+    JSZip = require('node-zip');
 
-function extractFiles(path, sheet) {
-	var unzip = require('unzip'),
-		deferred = defer();
+function extractFiles(path, sheets, callback) {
+    var files = {
+        strings: {},
+        sheets: [],
+        // styles: {},
+    };
 
-	var files = {
-        strings: {
-			deferred: defer()
-		},
-        sheet: {
-            deferred: defer()
-        },
-		'xl/sharedStrings.xml': 'strings'
-	};
+    fs.readFile(path, 'binary', function(err, data) {
+        if (err || !data) {
+            return callback(err || new Error('data not exists'));
+        }
+        try {
+            var zip = new JSZip(data, { base64: false });
+        } catch (e) {
+            return callback(e);
+        }
+        var raw, contents;
+        raw = zip && zip.files && zip.files['xl/sharedStrings.xml'];
+        contents = raw && (typeof raw.asText === 'function') && raw.asText();
+        if (!contents) {
+            return callback(new Error('xl/sharedStrings.xml not exists (maybe not xlsx file)'));
+        }
+        files.strings.contents = contents;
 
-    var noop = function () {};
+        // raw = zip && zip.files && zip.files['xl/styles.xml'];
+        // contents = raw && (typeof raw.asText === 'function') && raw.asText();
+        // if (!contents) {
+        //     return callback(new Error('xl/styles.xml not exists (maybe not xlsx file)'));
+        // }
+        // files.styles.contents = contents;
 
-    files['xl/worksheets/sheet' + sheet + '.xml'] = 'sheet';
-
-	var srcStream = path instanceof require('stream') ?
-		path :
-		require('fs').createReadStream(path);
-
-	srcStream
-		.pipe(unzip.Parse())
-		.on('error', function(err) {
-			deferred.reject(err);
-		})
-		.on('entry', function(entry) {
-			if (files[entry.path]) {
-				var contents = '';
-				entry.on('data', function(data) {
-					contents += data.toString();
-				}).on('end', function() {
-					files[files[entry.path]].contents = contents;
-					files[files[entry.path]].deferred.resolve();
-				});
-			} else {
-                entry.on('data', noop); // otherwise unzip.Parse() will hang forever on this entry on some xlsx files
+        var sheetNum;
+        if (sheets) {
+            for (i = 0; i < sheets.length; i++) {
+                sheetNum = sheets[i];
+                raw = zip.files['xl/worksheets/sheet' + sheetNum + '.xml'];
+                contents = raw && (typeof raw.asText === 'function') && raw.asText();
+                if (!contents) {
+                    return callback(new Error('sheet ' + sheetNum + ' not exists'));
+                }
+                files.sheets.push({
+                    sheetNum: sheetNum,
+                    contents: contents
+                });
             }
-		});
-
-	when(all(_.pluck(files, 'deferred')), function() {
-		deferred.resolve(files);
-	});
-
-	return deferred.promise;
+        } else {
+            sheetNum = 1;
+            while (true) {
+                raw = zip.files['xl/worksheets/sheet' + sheetNum + '.xml'];
+                contents = raw && (typeof raw.asText === 'function') && raw.asText();
+                if (!contents) break;
+                files.sheets.push({
+                    sheetNum: sheetNum,
+                    contents: contents
+                });
+                sheetNum++;
+            }
+        }
+        callback(null, files);
+    });
 }
 
 function calculateDimensions (cells) {
@@ -68,106 +80,113 @@ function calculateDimensions (cells) {
 }
 
 function extractData(files) {
-	var libxmljs = require('libxmljs'),
-		sheet = libxmljs.parseXml(files.sheet.contents),
-		strings = libxmljs.parseXml(files.strings.contents),
-		ns = {a: 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'},
-		data = [];
+    var libxmljs = require('libxmljs');
+    try {
+        var strings = libxmljs.parseXml(files.strings.contents),
+            // styles = libxmljs.parseXml(files.styles.contents),
+            ns = {a: 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'},
+            data = [];
+        var sheets = _(files.sheets).map(function(sheetObj) {
+            return {
+                sheetNum: sheetObj.sheetNum,
+                xml: libxmljs.parseXml(sheetObj.contents)
+            };
+        });
 
-	var colToInt = function(col) {
-		var letters = ["", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"];
-		col = col.trim().split('');
-		
-		var n = 0;
+    } catch (e) {
+        return [];
+    }
 
-		for (var i = 0; i < col.length; i++) {
-			n *= 26;
-			n += letters.indexOf(col[i]);
-		}
+    var colToInt = function(col) {
+        var letters = ["", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"];
+        col = col.trim().split('');
 
-		return n;
-	};
+        var n = 0;
 
-	var CellCoords = function(cell) {
-		cell = cell.split(/([0-9]+)/);
-		this.row = parseInt(cell[1]);
-		this.column = colToInt(cell[0]);
-	};
+        for (var i = 0; i < col.length; i++) {
+            n *= 26;
+            n += letters.indexOf(col[i]);
+        }
 
-	var na = { value: function() { return ''; },
+        return n;
+    };
+
+    var CellCoords = function(cell) {
+        cell = cell.split(/([0-9]+)/);
+        this.row = parseInt(cell[1]);
+        this.column = colToInt(cell[0]);
+    };
+
+    var na = { value: function() { return ''; },
         text:  function() { return ''; } };
 
-	var Cell = function(cellNode) {
-		var r = cellNode.attr('r').value(),
-			type = (cellNode.attr('t') || na).value(),
-			value = (cellNode.get('a:v', ns) || na ).text(),
-			coords = new CellCoords(r);
+    var Cell = function(cellNode) {
+        var r = cellNode.attr('r').value(),
+            type = (cellNode.attr('t') || na).value(),
+            value = (cellNode.get('a:v', ns) || na ).text(),
+            coords = new CellCoords(r);
 
-		this.column = coords.column;
-		this.row = coords.row;
-		this.value = value;
-		this.type = type;
-	};
+        this.column = coords.column;
+        this.row = coords.row;
+        this.value = value;
+        this.type = type;
+    };
 
-	var cellNodes = sheet.find('//a:sheetData//a:row//a:c', ns);
-	var cells = _(cellNodes).map(function (node) {
-		return new Cell(node);
-	});
+    _(sheets).each(function(sheetObj) {
+        var sheet = sheetObj.xml;
+        var cellNodes = sheet.find('/a:worksheet/a:sheetData/a:row/a:c', ns);
+        var cells = _(cellNodes).map(function (node) {
+            return new Cell(node);
+        });
+        var onedata = [];
 
-	var d = sheet.get('//a:dimension/@ref', ns);
-	if (d) {
-		d = _.map(d.value().split(':'), function(v) { return new CellCoords(v); });
-	} else {
-        d = calculateDimensions(cells)
-	}
+        var d = sheet.get('//a:dimension/@ref', ns);
+        if (d) {
+            d = _.map(d.value().split(':'), function(v) { return new CellCoords(v); });
+        } else {
+            d = calculateDimensions(cells)
+        }
 
-	var cols = d[1].column - d[0].column + 1,
-		rows = d[1].row - d[0].row + 1;
+        var cols = d[1].column - d[0].column + 1,
+            rows = d[1].row - d[0].row + 1;
 
-	_(rows).times(function() {
-		var _row = [];
-		_(cols).times(function() { _row.push(''); });
-		data.push(_row);
-	});
+        _(rows).times(function() {
+            var _row = [];
+            _(cols).times(function() { _row.push(''); });
+            onedata.push(_row);
+        });
 
-	_.each(cells, function(cell) {
-		var value = cell.value;
+        _(cells).each(function(cell) {
+            var value = cell.value;
 
-		if (cell.type == 's') value = strings.get('//a:si[' + (parseInt(value) + 1) + ']//a:t', ns).text();
+            if (cell.type == 's') value = strings.get('//a:si[' + (parseInt(value) + 1) + ']//a:t', ns).text();
 
-		data[cell.row - d[0].row][cell.column - d[0].column] = value;
-	});
-
-	return data;
+            onedata[cell.row - d[0].row][cell.column - d[0].column] = value;
+        });
+        data.push({
+            sheetNum: sheetObj.sheetNum,
+            // TODO: sheetName: get from styles
+            contents: onedata
+        });
+    });
+    return data;
 }
 
 module.exports = function parseXlsx() {
-  if(arguments.length == 2) {
-    path = arguments[0];
-    sheet = '1';
-    cb = arguments[1];
-  }
-  if(arguments.length == 3) {
-    path = arguments[0];
-    sheet = arguments[1];
-    cb = arguments[2];
-  }
-	extractFiles(path, sheet).then(function(files) {
-		cb(null, extractData(files));
-	},
-	function(err) {
-		cb(err);
-	});
-};
-
-
-
-var files = {
-    strings: {
-        deferred: defer()
-    },
-    sheet: {
-        deferred: defer()
-    },
-    'xl/sharedStrings.xml': 'strings'
+    var path, sheets, cb;
+    if (arguments.length == 2) {
+        path = arguments[0];
+        sheets = null;
+        cb = arguments[1];
+    }
+    else if (arguments.length == 3) {
+        path = arguments[0];
+        sheets = arguments[1];
+        if (!Array.isArray(sheets)) sheets = [sheets];
+        cb = arguments[2];
+    }
+    extractFiles(path, sheets, function(err, files) {
+        if (err) return cb(err);
+        cb(null, extractData(files));
+    });
 };
