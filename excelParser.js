@@ -159,7 +159,15 @@ function extractData(files) {
         _(cells).each(function(cell) {
             var value = cell.value;
 
-            if (cell.type == 's') value = strings.get('//a:si[' + (parseInt(value) + 1) + ']//a:t', ns).text();
+            if (cell.type == 's') {
+                var tmp = '';
+                _(strings.find('//a:si[' + (parseInt(value) + 1) + ']//a:t', ns)).each(function(t) {
+                    if (t.get('..').name() != 'rPh') {
+                        tmp += t.text();
+                    }
+                });
+                value = tmp;
+            }
 
             onedata[cell.row - d[0].row][cell.column - d[0].column] = value;
         });
