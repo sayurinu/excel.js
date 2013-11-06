@@ -35,7 +35,7 @@ function extractFiles(path, sheets, callback) {
 
         var sheetNum;
         if (sheets) {
-            for (i = 0; i < sheets.length; i++) {
+            for (var i = 0; i < sheets.length; i++) {
                 sheetNum = sheets[i];
                 raw = zip.files['xl/worksheets/sheet' + sheetNum + '.xml'];
                 contents = raw && (typeof raw.asText === 'function') && raw.asText();
@@ -144,7 +144,7 @@ function extractData(files) {
         if (d) {
             d = _.map(d.value().split(':'), function(v) { return new CellCoords(v); });
         } else {
-            d = calculateDimensions(cells)
+            d = calculateDimensions(cells);
         }
 
         var cols = d[1].column - d[0].column + 1,
