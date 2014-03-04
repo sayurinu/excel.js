@@ -16,7 +16,7 @@ Use
     parseXlsx('Spreadsheet.xlsx', function(err, data) {
       if(err) throw err;
       console.log(data);
-      // [ { sheetNum: 1, contents: (array of arrays) }, ... ]
+      // [ { sheetNum: 1, , sheetName: 'hoge', contents: (array of arrays) }, ... ]
     });
 
 If you have multiple sheets in your spreadsheet,
@@ -24,7 +24,7 @@ If you have multiple sheets in your spreadsheet,
     parseXlsx('Spreadsheet.xlsx', [2, 3], function(err, data) {
       if (err) throw err; // if sheet2 or sheet3 does not exist, an error occurs
       console.log(data);
-      // [ { sheetNum: 2, contents: (array of arrays) }, { sheetNum: 3, contents: (array of arrays) } ]
+      // [ { sheetNum: 2, sheetName: 'hoge', contents: (array of arrays) }, { sheetNum: 3, sheetName: 'hoge', contents: (array of arrays) } ]
     });
     
 

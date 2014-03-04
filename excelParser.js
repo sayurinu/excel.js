@@ -1,4 +1,4 @@
-var _ = require('underscore'),
+var _ = require('lodash'),
     fs = require('fs'),
     JSZip = require('node-zip');
 
@@ -6,7 +6,8 @@ function extractFiles(path, sheets, callback) {
     var files = {
         strings: {},
         sheets: [],
-        // styles: {},
+        book: {}
+        //styles: {},
     };
 
     fs.readFile(path, 'binary', function(err, data) {
@@ -26,12 +27,19 @@ function extractFiles(path, sheets, callback) {
         }
         files.strings.contents = contents;
 
-        // raw = zip && zip.files && zip.files['xl/styles.xml'];
-        // contents = raw && (typeof raw.asText === 'function') && raw.asText();
-        // if (!contents) {
-        //     return callback(new Error('xl/styles.xml not exists (maybe not xlsx file)'));
-        // }
-        // files.styles.contents = contents;
+        //raw = zip && zip.files && zip.files['xl/styles.xml'];
+        //contents = raw && (typeof raw.asText === 'function') && raw.asText();
+        //if (!contents) {
+        //    return callback(new Error('xl/styles.xml not exists (maybe not xlsx file)'));
+        //}
+        //files.styles.contents = contents;
+
+        raw = zip && zip.files && zip.files['xl/workbook.xml'];
+        contents = raw && (typeof raw.asText === 'function') && raw.asText();
+        if (!contents) {
+            return callback(new Error('xl/workbook.xml not exists (maybe not xlsx file)'));
+        }
+        files.book.contents = contents;
 
         var sheetNum;
         if (sheets) {
@@ -83,16 +91,23 @@ function extractData(files) {
     var libxmljs = require('libxmljs');
     try {
         var strings = libxmljs.parseXml(files.strings.contents),
-            // styles = libxmljs.parseXml(files.styles.contents),
+            book = libxmljs.parseXml(files.book.contents),
+            //styles = libxmljs.parseXml(files.styles.contents),
             ns = {a: 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'},
             data = [];
+        
+        var b = book.find('//a:sheets//a:sheet', ns);
+        var sheetNames = _(b).map(function(tag) {
+            return {sheetName: tag.attr('name').value()};
+        });
         var sheets = _(files.sheets).map(function(sheetObj) {
             return {
                 sheetNum: sheetObj.sheetNum,
                 xml: libxmljs.parseXml(sheetObj.contents)
             };
         });
-
+        //sheets and sheetNames were retained the arrangement.
+        _.merge(sheets, sheetNames);
     } catch (e) {
         return [];
     }
@@ -173,7 +188,7 @@ function extractData(files) {
         });
         data.push({
             sheetNum: sheetObj.sheetNum,
-            // TODO: sheetName: get from styles
+            sheetName: sheetObj.sheetName,
             contents: onedata
         });
     });
