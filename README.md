@@ -11,7 +11,7 @@ Use
 ====
 (edited by @shibucafe)
 
-    var parseXlsx = require('excel');
+    var parseXlsx = require('excel'); 
 
     parseXlsx('Spreadsheet.xlsx', function(err, data) {
       if(err) throw err;
