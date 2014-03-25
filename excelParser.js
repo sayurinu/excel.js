@@ -1,5 +1,5 @@
 var _ = require('lodash'),
-    __ = require('underscore'),
+    async = require('async'),
     fs = require('fs'),
     JSZip = require('node-zip');
 
@@ -8,13 +8,13 @@ function extractFiles(path, sheets, callback) {
         strings: {},
         sheets: [],
         book: {}
-        //styles: {},
     };
 
     fs.readFile(path, 'binary', function(err, data) {
         if (err || !data) {
             return callback(err || new Error('data not exists'));
         }
+
         try {
             var zip = new JSZip(data, { base64: false });
         } catch (e) {
@@ -27,13 +27,6 @@ function extractFiles(path, sheets, callback) {
             return callback(new Error('xl/sharedStrings.xml not exists (maybe not xlsx file)'));
         }
         files.strings.contents = contents;
-
-        //raw = zip && zip.files && zip.files['xl/styles.xml'];
-        //contents = raw && (typeof raw.asText === 'function') && raw.asText();
-        //if (!contents) {
-        //    return callback(new Error('xl/styles.xml not exists (maybe not xlsx file)'));
-        //}
-        //files.styles.contents = contents;
 
         raw = zip && zip.files && zip.files['xl/workbook.xml'];
         contents = raw && (typeof raw.asText === 'function') && raw.asText();
@@ -102,7 +95,7 @@ function extractData(files, callback) {
         var sheetNames = _.map(b, function(tag) {
             return tag.attr('name').value();
         });
-        
+
         //sheets and sheetNames were retained the arrangement.
         sheets = _.map(files.sheets, function(sheetObj) {
             return {
@@ -150,12 +143,9 @@ function extractData(files, callback) {
         this.type = type;
     };
 
-    _(sheets).each(function(sheetObj) {
+    async.eachSeries(sheets, function(sheetObj, next) {
         var sheet = sheetObj.xml;
-        var cellNodes = sheet.find('/a:worksheet/a:sheetData/a:row/a:c', ns);
-        var cells = _(cellNodes).map(function (node) {
-            return new Cell(node);
-        });
+        var cellNodes, cells;
         var onedata = [];
 
         var d = sheet.get('//a:dimension/@ref', ns);
@@ -168,34 +158,62 @@ function extractData(files, callback) {
         var cols = d[1].column - d[0].column + 1,
             rows = d[1].row - d[0].row + 1;
 
-        _(rows).times(function() {
-            var _row = [];
-            _(cols).times(function() { _row.push(''); });
-            onedata.push(_row);
-        });
-
-        _(cells).each(function(cell) {
-            var value = cell.value;
-
-            if (cell.type == 's') {
-                var tmp = '';
-                _(strings.find('//a:si[' + (parseInt(value) + 1) + ']//a:t', ns)).each(function(t) {
-                    if (t.get('..').name() != 'rPh') {
-                        tmp += t.text();
-                    }
+        async.series([
+            function(_next) {
+                cellNodes = sheet.find('/a:worksheet/a:sheetData/a:row/a:c', ns);
+                async.setImmediate(_next);
+            },
+            function(_next) {
+                async.mapSeries(cellNodes, function(node, __next) {
+                    async.setImmediate(function() {
+                        __next(null, new Cell(node));
+                    });
+                }, function(err, results) {
+                    cells = results;
+                    _next();
                 });
-                value = tmp;
-            }
+            },
+            function(_next) {
+                _(rows).times(function() {
+                    var _row = [];
+                    _(cols).times(function() { _row.push(''); });
+                    onedata.push(_row);
+                });
+                async.setImmediate(_next);
+            },
+            function(_next) {
+                _(cells).each(function(cell) {
+                    var value = cell.value;
 
-            onedata[cell.row - d[0].row][cell.column - d[0].column] = value;
+                    if (cell.type == 's') {
+                        var tmp = '';
+                        _(strings.find('//a:si[' + (parseInt(value) + 1) + ']//a:t', ns)).each(function(t) {
+                            if (t.get('..').name() != 'rPh') {
+                                tmp += t.text();
+                            }
+                        });
+                        value = tmp;
+                    }
+
+                    onedata[cell.row - d[0].row][cell.column - d[0].column] = value;
+
+                });
+                async.setImmediate(_next);
+            },
+            function(_next) {
+                data.push({
+                    sheetNum: sheetObj.sheetNum,
+                    sheetName: sheetObj.sheetName,
+                    contents: onedata
+                });
+                _next();
+            },
+        ], function() {
+            next();
         });
-        data.push({
-            sheetNum: sheetObj.sheetNum,
-            sheetName: sheetObj.sheetName,
-            contents: onedata
-        });
+    }, function() {
+        callback(null, data);
     });
-    callback(data);
 }
 
 module.exports = function parseXlsx() {

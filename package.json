@@ -4,13 +4,20 @@
   "description": "Web and node.js spreadsheet library. Supports xlsx, csv, tsv (or any simple delimited file) for now.",
   "main": "excelParser.js",
   "contributors": [
-    { "name": "Jake Scott", "email": "scott.iroh@gmail.com" },
-    { "name": "Fabian Tollenaar", "email": "fabian@starting-point.nl" }
+    {
+      "name": "Jake Scott",
+      "email": "scott.iroh@gmail.com"
+    },
+    {
+      "name": "Fabian Tollenaar",
+      "email": "fabian@starting-point.nl"
+    }
   ],
   "dependencies": {
     "libxmljs": "*",
     "node-zip": "~1.0.1",
     "lodash": "~2.4.1",
+    "async": "~0.2.10",
     "should": "*",
     "mocha": "*"
   },
