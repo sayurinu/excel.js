@@ -10,7 +10,9 @@
   "dependencies": {
     "libxmljs": "*",
     "node-zip": "~1.0.1",
-    "lodash": "~2.4.1"
+    "lodash": "~2.4.1",
+    "should": "*",
+    "mocha": "*"
   },
   "devDependencies": {
     "stencil-js": ">= 0.8.4",
