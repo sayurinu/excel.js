@@ -123,7 +123,9 @@ function extractData(files, callback) {
     };
 
     var CellCoords = function(cell) {
+        console.log(cell);
         cell = cell.split(/([0-9]+)/);
+        console.log(cell);
         this.row = parseInt(cell[1]);
         this.column = colToInt(cell[0]);
     };
@@ -145,18 +147,8 @@ function extractData(files, callback) {
 
     async.eachSeries(sheets, function(sheetObj, next) {
         var sheet = sheetObj.xml;
-        var cellNodes, cells;
+        var cellNodes, cells, d;
         var onedata = [];
-
-        var d = sheet.get('//a:dimension/@ref', ns);
-        if (d) {
-            d = _.map(d.value().split(':'), function(v) { return new CellCoords(v); });
-        } else {
-            d = calculateDimensions(cells);
-        }
-
-        var cols = d[1].column - d[0].column + 1,
-            rows = d[1].row - d[0].row + 1;
 
         async.series([
             function(_next) {
@@ -174,6 +166,17 @@ function extractData(files, callback) {
                 });
             },
             function(_next) {
+                d = sheet.get('//a:dimension/@ref', ns);
+                if (d) {
+                    d = _.map(d.value().split(':'), function(v) { return new CellCoords(v); });
+                } else {
+                    d = calculateDimensions(cells);
+                }
+                async.setImmediate(_next);
+            },
+            function(_next) {
+                var cols = d[1].column - d[0].column + 1,
+                    rows = d[1].row - d[0].row + 1;
                 _(rows).times(function() {
                     var _row = [];
                     _(cols).times(function() { _row.push(''); });
