@@ -1,4 +1,5 @@
 var _ = require('lodash'),
+    __ = require('underscore'),
     fs = require('fs'),
     JSZip = require('node-zip');
 
@@ -87,7 +88,7 @@ function calculateDimensions (cells) {
     ];
 }
 
-function extractData(files) {
+function extractData(files, callback) {
     var libxmljs = require('libxmljs');
     try {
         var strings = libxmljs.parseXml(files.strings.contents),
@@ -95,7 +96,7 @@ function extractData(files) {
             //styles = libxmljs.parseXml(files.styles.contents),
             ns = {a: 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'},
             data = [];
-        
+
         var b = book.find('//a:sheets//a:sheet', ns);
         var sheetNames = _(b).map(function(tag) {
             return {sheetName: tag.attr('name').value()};
@@ -109,7 +110,7 @@ function extractData(files) {
         //sheets and sheetNames were retained the arrangement.
         _.merge(sheets, sheetNames);
     } catch (e) {
-        return [];
+        return callback(e);
     }
 
     var colToInt = function(col) {
@@ -192,24 +193,24 @@ function extractData(files) {
             contents: onedata
         });
     });
-    return data;
+    callback(data);
 }
 
 module.exports = function parseXlsx() {
-    var path, sheets, cb;
+    var path, sheets, callback;
     if (arguments.length == 2) {
         path = arguments[0];
         sheets = null;
-        cb = arguments[1];
+        callback = arguments[1];
     }
     else if (arguments.length == 3) {
         path = arguments[0];
         sheets = arguments[1];
         if (typeof sheets === 'number') sheets = [sheets];
-        cb = arguments[2];
+        callback = arguments[2];
     }
     extractFiles(path, sheets, function(err, files) {
-        if (err) return cb(err);
-        cb(null, extractData(files));
+        if (err) return callback(err);
+        extractData(files, callback);
     });
 };
