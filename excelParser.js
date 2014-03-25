@@ -89,6 +89,7 @@ function calculateDimensions (cells) {
 
 function extractData(files) {
     var libxmljs = require('libxmljs');
+    var sheets;
     try {
         var strings = libxmljs.parseXml(files.strings.contents),
             book = libxmljs.parseXml(files.book.contents),
@@ -97,17 +98,18 @@ function extractData(files) {
             data = [];
         
         var b = book.find('//a:sheets//a:sheet', ns);
-        var sheetNames = _(b).map(function(tag) {
-            return {sheetName: tag.attr('name').value()};
+        var sheetNames = _.map(b, function(tag) {
+            return tag.attr('name').value();
         });
-        var sheets = _(files.sheets).map(function(sheetObj) {
+        
+        //sheets and sheetNames were retained the arrangement.
+        sheets = _.map(files.sheets, function(sheetObj) {
             return {
                 sheetNum: sheetObj.sheetNum,
+                sheetName: sheetNames[sheetObj.sheetNum - 1],
                 xml: libxmljs.parseXml(sheetObj.contents)
             };
         });
-        //sheets and sheetNames were retained the arrangement.
-        _.merge(sheets, sheetNames);
     } catch (e) {
         return [];
     }
