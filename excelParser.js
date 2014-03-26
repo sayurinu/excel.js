@@ -88,8 +88,7 @@ function extractData(files, callback) {
         var strings = libxmljs.parseXml(files.strings.contents),
             book = libxmljs.parseXml(files.book.contents),
             //styles = libxmljs.parseXml(files.styles.contents),
-            ns = {a: 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'},
-            data = [];
+            ns = {a: 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'};
 
         var b = book.find('//a:sheets//a:sheet', ns);
         var sheetNames = _.map(b, function(tag) {
@@ -143,7 +142,7 @@ function extractData(files, callback) {
         this.type = type;
     };
 
-    async.eachSeries(sheets, function(sheetObj, next) {
+    async.mapSeries(sheets, function(sheetObj, next) {
         var sheet = sheetObj.xml;
         var cellNodes, cells, d;
         var onedata = [];
@@ -154,10 +153,17 @@ function extractData(files, callback) {
                 async.setImmediate(_next);
             },
             function(_next) {
+                var count = 0;
                 async.mapSeries(cellNodes, function(node, __next) {
-                    async.setImmediate(function() {
+                    // use setImmediate every 100 times
+                    count = (count + 1) % 100;
+                    if (count === 0) {
+                        async.setImmediate(function() {
+                            __next(null, new Cell(node));
+                        });
+                    } else {
                         __next(null, new Cell(node));
-                    });
+                    }
                 }, function(err, results) {
                     cells = results;
                     _next();
@@ -200,21 +206,15 @@ function extractData(files, callback) {
 
                 });
                 async.setImmediate(_next);
-            },
-            function(_next) {
-                data.push({
-                    sheetNum: sheetObj.sheetNum,
-                    sheetName: sheetObj.sheetName,
-                    contents: onedata
-                });
-                _next();
-            },
+            }
         ], function() {
-            next();
+            next(null, {
+                sheetNum: sheetObj.sheetNum,
+                sheetName: sheetObj.sheetName,
+                contents: onedata
+            });
         });
-    }, function() {
-        callback(null, data);
-    });
+    }, callback);
 }
 
 module.exports = function parseXlsx() {
