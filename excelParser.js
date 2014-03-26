@@ -123,9 +123,7 @@ function extractData(files, callback) {
     };
 
     var CellCoords = function(cell) {
-        console.log(cell);
         cell = cell.split(/([0-9]+)/);
-        console.log(cell);
         this.row = parseInt(cell[1]);
         this.column = colToInt(cell[0]);
     };
