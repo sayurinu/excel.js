@@ -68,8 +68,8 @@ function extractFiles(path, sheets, callback) {
 
 function calculateDimensions (cells) {
     var comparator = function (a, b) { return a-b; };
-    var allRows = _(cells).map(function (cell) { return cell.row; }).sort(comparator),
-        allCols = _(cells).map(function (cell) { return cell.column; }).sort(comparator),
+    var allRows = _.map(cells, function (cell) { return cell.row; }).sort(comparator),
+        allCols = _.map(cells, function (cell) { return cell.column; }).sort(comparator),
         minRow = allRows[0],
         maxRow = _.last(allRows),
         minCol = allCols[0],
