@@ -50,15 +50,27 @@ function extractFiles(path, sheets, callback) {
                 });
             }
         } else {
+            var xlmNum = 0;
             sheetNum = 1;
             while (true) {
-                raw = zip.files['xl/worksheets/sheet' + sheetNum + '.xml'];
+                if (xlmNum === 0) {
+                    raw = zip.files['xl/worksheets/sheet.xml'];
+                } else {
+                    raw = zip.files['xl/worksheets/sheet' + xlmNum + '.xml'];
+                }
+
                 contents = raw && (typeof raw.asText === 'function') && raw.asText();
+                if (xlmNum === 0 && !contents) {
+                    xlmNum++;
+                    continue;
+                }
+
                 if (!contents) break;
                 files.sheets.push({
                     sheetNum: sheetNum,
                     contents: contents
                 });
+                xlmNum++;
                 sheetNum++;
             }
         }
