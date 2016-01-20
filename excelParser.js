@@ -20,16 +20,21 @@ function extractFiles(path, sheets, callback) {
         } catch (e) {
             return callback(e);
         }
-        var raw, contents;
-        raw = zip && zip.files && zip.files['xl/sharedStrings.xml'];
-        contents = raw && (typeof raw.asText === 'function') && raw.asText();
+
+        // get contents by xml path
+        function getContents_(path) {
+            var raw = zip && zip.files && zip.files[path];
+            return raw && (typeof raw.asText === 'function') && raw.asText();
+        }
+
+        var contents;
+        contents = getContents_('xl/sharedStrings.xml');
         if (!contents) {
             return callback(new Error('xl/sharedStrings.xml not exists (maybe not xlsx file)'));
         }
         files.strings.contents = contents;
 
-        raw = zip && zip.files && zip.files['xl/workbook.xml'];
-        contents = raw && (typeof raw.asText === 'function') && raw.asText();
+        contents = getContents_('xl/workbook.xml');
         if (!contents) {
             return callback(new Error('xl/workbook.xml not exists (maybe not xlsx file)'));
         }
@@ -39,8 +44,7 @@ function extractFiles(path, sheets, callback) {
         if (sheets) {
             for (var i = 0; i < sheets.length; i++) {
                 sheetNum = sheets[i];
-                raw = zip.files['xl/worksheets/sheet' + sheetNum + '.xml'];
-                contents = raw && (typeof raw.asText === 'function') && raw.asText();
+                contents = getContents_('xl/worksheets/sheet' + sheetNum + '.xml');
                 if (!contents) {
                     return callback(new Error('sheet ' + sheetNum + ' not exists'));
                 }
@@ -50,15 +54,25 @@ function extractFiles(path, sheets, callback) {
                 });
             }
         } else {
-            sheetNum = 1;
-            while (true) {
-                raw = zip.files['xl/worksheets/sheet' + sheetNum + '.xml'];
-                contents = raw && (typeof raw.asText === 'function') && raw.asText();
-                if (!contents) break;
+            // push contents to sheets array
+            function sheetsPush_(contents) {
                 files.sheets.push({
-                    sheetNum: sheetNum,
+                    sheetNum: files.sheets.length + 1,
                     contents: contents
                 });
+            }
+
+            // for google spreadsheet
+            var firstSheetContents = getContents_('xl/worksheets/sheet.xml');
+            if (firstSheetContents) {
+                sheetsPush_(firstSheetContents);
+            }
+
+            sheetNum = 1;
+            while (true) {
+                contents = getContents_('xl/worksheets/sheet' + sheetNum + '.xml');
+                if (!contents) break;
+                sheetsPush_(contents);
                 sheetNum++;
             }
         }
